@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="bitly">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/app/libs/bitly.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
