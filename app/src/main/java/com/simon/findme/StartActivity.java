@@ -1,16 +1,22 @@
 package com.simon.findme;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.DialogFragment;
+import android.app.Fragment;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -46,6 +52,8 @@ public class StartActivity extends FragmentActivity implements
 
     public LocationClient mLocationClient;
     public Location mCurrentLocation;
+    public LocationManager locationManager;
+    public LocationListener locationListener;
 
     private TextView mAddress;
     private ProgressBar mActivityIndicator;
@@ -75,9 +83,37 @@ public class StartActivity extends FragmentActivity implements
         mActivityIndicator = (ProgressBar) findViewById(R.id.address_progress);
         mRefreshButton = (ImageButton) findViewById(R.id.refresh_btn);
 
+        mRefreshButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                refreshlocation();
+            }
+        });
+
         mLocationClient = new LocationClient(this, this, this);
 
         map = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
+
+        // Acquire a reference to the system Location Manager
+        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+
+        // Define a listener that responds to location updates
+        locationListener = new LocationListener() {
+            public void onLocationChanged(Location location) {
+                // Called when a new location is found by the network location provider.
+                mCurrentLocation = location;
+                refreshlocation();
+            }
+
+            public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+            public void onProviderEnabled(String provider) {}
+
+            public void onProviderDisabled(String provider) {}
+        };
+
+        // Register the listener with the Location Manager to receive location updates
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 
     }
 
@@ -98,28 +134,47 @@ public class StartActivity extends FragmentActivity implements
     protected void onStop() {
         // Disconnecting the client invalidates it.
         mLocationClient.disconnect();
+        locationManager.removeUpdates(locationListener);
         super.onStop();
     }
 
     //This is the onClick() method for our main layout's button.
     public void shareLocation(View v) {
-        //We take the base url for Google Maps. "daddr=" is Destionation Adress
-        // and we just add the latitude and Longitude of the current location
-        String longUrl = "http://maps.google.com/?daddr=" + mCurrentLocation.getLatitude() + "," + mCurrentLocation.getLongitude();
 
-        new URLShort().execute(longUrl);
+        if (mCurrentLocation == null) {
+            Toast.makeText(this, "Unable to get location", Toast.LENGTH_LONG).show();
+        } else {
+            //We take the base url for Google Maps. "daddr=" is Destionation Adress
+            // and we just add the latitude and Longitude of the current location
+            String longUrl = "http://maps.google.com/?daddr=" + mCurrentLocation.getLatitude() + "," + mCurrentLocation.getLongitude();
+
+            new URLShort().execute(longUrl);
+        }
 
     }
 
     public void refreshlocation() {
 
-        mCurrentLocation = mLocationClient.getLastLocation();
+        if (mCurrentLocation == null) {
 
-        // Ensure that a Geocoder services is available
-        if (Geocoder.isPresent()) {
-            // Show the activity indicator
-            mActivityIndicator.setVisibility(View.VISIBLE);
-            mRefreshButton.setVisibility(View.GONE);
+            if (mLocationClient.getLastLocation() == null) {
+                //Show alert prompting user to enable location access
+                EnableLocationDialogFragment frag = new EnableLocationDialogFragment();
+                frag.show(getFragmentManager(), "EnableLocationDialogFragment");
+
+                mAddress.setText("Error");
+
+            } else {
+                mCurrentLocation = mLocationClient.getLastLocation();
+                refreshlocation();
+            }
+
+        } else {
+            // Ensure that a Geocoder services is available
+            if (Geocoder.isPresent()) {
+                // Show the activity indicator
+                mActivityIndicator.setVisibility(View.VISIBLE);
+                mRefreshButton.setVisibility(View.GONE);
             /*s
              * Reverse geocoding is long-running and synchronous.
              * Run it on a background thread.
@@ -127,19 +182,22 @@ public class StartActivity extends FragmentActivity implements
              * When the task finishes,
              * onPostExecute() displays the address.
              */
-            (new GetAddressTask(this)).execute(mCurrentLocation);
+                (new GetAddressTask(this)).execute(mCurrentLocation);
+            }
+
+            //We create a LatLng position from our mCurrentPosition which can be used by the GoogleMap object
+            LatLng position = new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude());
+
+            //Move the camera and add the marker in the correct location
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(position, 13));
+            map.clear();
+            map.addMarker(new MarkerOptions()
+                    .title("Current position")
+                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_launcher))
+                    .position(position));
         }
 
-        //We create a LatLng position from our mCurrentPosition which can be used by the GoogleMap object
-        LatLng position = new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude());
 
-        //Move the camera and add the marker in the correct location
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(position, 13));
-        map.clear();
-        map.addMarker(new MarkerOptions()
-                .title("Current position")
-                .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_launcher))
-                .position(position));
     }
 
 
@@ -147,19 +205,75 @@ public class StartActivity extends FragmentActivity implements
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
+            ShortenUrlDialogFragment frag = new ShortenUrlDialogFragment();
+            frag.show(getFragmentManager(), "ShortenUrlDialogFragment");
         }
+
         @Override
         protected String doInBackground(String... args) {
             //  simmepinne is my username and R_48e81964547b41c697d3c66c833ad59d is the API key I use
             return as("simmepinne", "R_48e81964547b41c697d3c66c833ad59d").call(shorten(args[0])).getShortUrl();
         }
+
         @Override
         protected void onPostExecute(String shortUrl) {
+
             //We just use a normal share intent
             Intent sharingIntent = new Intent(android.content.Intent.ACTION_SEND);
             sharingIntent.setType("text/plain");
             sharingIntent.putExtra(android.content.Intent.EXTRA_TEXT, shortUrl);
             startActivity(Intent.createChooser(sharingIntent, "Share using"));
+
+            Fragment fragment = getFragmentManager().findFragmentByTag("ShortenUrlDialogFragment");
+            if (fragment instanceof ShortenUrlDialogFragment) {
+                ((ShortenUrlDialogFragment) fragment).dismiss();
+            }
+        }
+    }
+
+
+    /*
+    * Alert Dialog to prompt user to enable location access
+    */
+
+    public static class EnableLocationDialogFragment extends DialogFragment {
+        @Override
+        public Dialog onCreateDialog(Bundle savedInstanceState) {
+            // Use the Builder class for convenient dialog construction
+            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+            builder.setMessage("Location update failed, plese enable GPS from the settings")
+                    .setPositiveButton("Enable GPS", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            startActivityForResult(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS), 0);
+                        }
+                    })
+                    .setNegativeButton("Dismiss", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            dialog.dismiss();
+                        }
+                    });
+            // Create the AlertDialog object and return it
+            return builder.create();
+        }
+    }
+
+
+
+    /*
+    * Alert Dialog to show shortening URL progress spinner
+    */
+
+    public static class ShortenUrlDialogFragment extends DialogFragment {
+        @Override
+        public Dialog onCreateDialog(Bundle savedInstanceState) {
+            // Use the Builder class for convenient dialog construction
+            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+
+            LayoutInflater inflater = getActivity().getLayoutInflater();
+            builder.setView(inflater.inflate(R.layout.url_short_layout, null));
+
+            // Create the AlertDialog object and return it
+            return builder.create();
         }
     }
 
@@ -173,6 +287,7 @@ public class StartActivity extends FragmentActivity implements
     @Override
     public void onConnected(Bundle dataBundle) {
         // Display the connection status
+        mCurrentLocation = mLocationClient.getLastLocation();
         refreshlocation();
 
     }

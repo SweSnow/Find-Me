@@ -45,7 +45,6 @@
 
                 <TextView
                     android:paddingTop="2dp"
-                    android:text="address"
                     android:textSize="22sp"
                     android:fontFamily="sans-serif-light"
                     android:textColor="#ffffff"
