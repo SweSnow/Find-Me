@@ -1,6 +1,5 @@
 package com.simon.findme;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.DialogFragment;
@@ -21,19 +20,22 @@ import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesClient;
-import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.location.LocationClient;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
@@ -43,22 +45,29 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-
 public class StartActivity extends FragmentActivity implements
         GooglePlayServicesClient.ConnectionCallbacks,
         GooglePlayServicesClient.OnConnectionFailedListener {
 
     private final static int CONNECTION_FAILURE_RESOLUTION_REQUEST = 9000;
 
+    /*Location objects*/
     public LocationClient mLocationClient;
     public Location mCurrentLocation;
     public LocationManager locationManager;
     public LocationListener locationListener;
+    public Location lastGpsLocation;
 
+    /*Views*/
     private TextView mAddress;
     private ProgressBar mActivityIndicator;
     private GoogleMap map;
     private ImageButton mRefreshButton;
+    private LinearLayout mLocationUpdateLayout;
+
+    /*Various*/
+    public static URLShort urlShort;
+    public boolean inDetailMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,17 +91,36 @@ public class StartActivity extends FragmentActivity implements
         mAddress = (TextView) findViewById(R.id.address);
         mActivityIndicator = (ProgressBar) findViewById(R.id.address_progress);
         mRefreshButton = (ImageButton) findViewById(R.id.refresh_btn);
+        mLocationUpdateLayout = (LinearLayout) findViewById(R.id.location_update_layout);
 
         mRefreshButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                refreshlocation();
+                refreshlocation(true);
             }
         });
 
         mLocationClient = new LocationClient(this, this, this);
 
         map = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
+
+        map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
+            @Override
+            public void onMapClick(LatLng latLng) {
+                locationManager.removeUpdates(locationListener);
+
+                Location clickedLocation = new Location("Clicked location");
+                clickedLocation.setLatitude(latLng.latitude);
+                clickedLocation.setLongitude(latLng.longitude);
+
+                mCurrentLocation = clickedLocation;
+                refreshlocation(true);
+
+                inDetailMode = true;
+
+                updateDetailMode();
+            }
+        });
 
         // Acquire a reference to the system Location Manager
         locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
@@ -102,7 +130,9 @@ public class StartActivity extends FragmentActivity implements
             public void onLocationChanged(Location location) {
                 // Called when a new location is found by the network location provider.
                 mCurrentLocation = location;
-                refreshlocation();
+                lastGpsLocation = location;
+
+                refreshlocation(false);
             }
 
             public void onStatusChanged(String provider, int status, Bundle extras) {}
@@ -148,12 +178,54 @@ public class StartActivity extends FragmentActivity implements
             // and we just add the latitude and Longitude of the current location
             String longUrl = "http://maps.google.com/?daddr=" + mCurrentLocation.getLatitude() + "," + mCurrentLocation.getLongitude();
 
-            new URLShort().execute(longUrl);
+            urlShort = new URLShort();
+
+            urlShort.execute(longUrl, getAdressFromLocation(mCurrentLocation));
         }
 
     }
 
-    public void refreshlocation() {
+    public void updateDetailMode() {
+        if (inDetailMode) {
+            mLocationUpdateLayout.setVisibility(View.VISIBLE);
+
+            Animation anim = AnimationUtils.loadAnimation(this, android.R.anim.fade_in);
+            mLocationUpdateLayout.startAnimation(anim);
+        } else {
+            Animation anim = AnimationUtils.loadAnimation(this, android.R.anim.fade_out);
+
+            anim.setAnimationListener(new Animation.AnimationListener() {
+                @Override
+                public void onAnimationStart(Animation animation) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animation animation) {
+                    mLocationUpdateLayout.setVisibility(View.GONE);
+                }
+
+                @Override
+                public void onAnimationRepeat(Animation animation) {
+
+                }
+            });
+
+            mLocationUpdateLayout.startAnimation(anim);
+        }
+    }
+
+    public void resumeLocationUpdates(View v) {
+        inDetailMode = false;
+        updateDetailMode();
+
+        mCurrentLocation = lastGpsLocation;
+        refreshlocation(true);
+
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+    }
+
+    public void refreshlocation(boolean animate) {
 
         if (mCurrentLocation == null) {
 
@@ -166,7 +238,7 @@ public class StartActivity extends FragmentActivity implements
 
             } else {
                 mCurrentLocation = mLocationClient.getLastLocation();
-                refreshlocation();
+                refreshlocation(true);
             }
 
         } else {
@@ -189,7 +261,15 @@ public class StartActivity extends FragmentActivity implements
             LatLng position = new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude());
 
             //Move the camera and add the marker in the correct location
-            map.moveCamera(CameraUpdateFactory.newLatLngZoom(position, 13));
+            if (animate) {
+
+                CameraPosition cameraPosition = CameraPosition.builder()
+                        .target(position)
+                        .zoom(13)
+                        .build();
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null);
+            }
+
             map.clear();
             map.addMarker(new MarkerOptions()
                     .title("Current position")
@@ -201,7 +281,7 @@ public class StartActivity extends FragmentActivity implements
     }
 
 
-    private class URLShort extends AsyncTask<String, String, String> {
+    public class URLShort extends AsyncTask<String, String, String> {
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
@@ -212,25 +292,49 @@ public class StartActivity extends FragmentActivity implements
         @Override
         protected String doInBackground(String... args) {
             //  simmepinne is my username and R_48e81964547b41c697d3c66c833ad59d is the API key I use
-            return as("simmepinne", "R_48e81964547b41c697d3c66c833ad59d").call(shorten(args[0])).getShortUrl();
+            String finalUrl = as("simmepinne", "R_48e81964547b41c697d3c66c833ad59d").call(shorten(args[0])).getShortUrl();
+
+            String longAdress = args[1];
+            //We shorten the full adress (Ex. Oxhagsvägen 68, Vendelsö, Sweden) to a shorter one such as
+            //just "Oxhagsvägen 68". This provides some context for the shared text without interupting the user flow.
+
+            boolean hasFoundComma = false;
+            StringBuilder sb = new StringBuilder();
+            int i = 0;
+
+            while (!hasFoundComma) {
+
+                Character charAtI = longAdress.charAt(i);
+
+                if (Character.toString(charAtI).equals(",")) {
+                    hasFoundComma = true;
+                } else {
+                    sb.append(Character.toString(charAtI));
+                }
+                i++;
+            }
+
+            return sb.toString() + " - " + finalUrl;
         }
 
         @Override
         protected void onPostExecute(String shortUrl) {
-
-            //We just use a normal share intent
-            Intent sharingIntent = new Intent(android.content.Intent.ACTION_SEND);
-            sharingIntent.setType("text/plain");
-            sharingIntent.putExtra(android.content.Intent.EXTRA_TEXT, shortUrl);
-            startActivity(Intent.createChooser(sharingIntent, "Share using"));
-
-            Fragment fragment = getFragmentManager().findFragmentByTag("ShortenUrlDialogFragment");
-            if (fragment instanceof ShortenUrlDialogFragment) {
-                ((ShortenUrlDialogFragment) fragment).dismiss();
-            }
+            share(shortUrl);
         }
     }
 
+    public void share(String shareText) {
+        //We just use a normal share intent
+        Intent sharingIntent = new Intent(android.content.Intent.ACTION_SEND);
+        sharingIntent.setType("text/plain");
+        sharingIntent.putExtra(android.content.Intent.EXTRA_TEXT, shareText);
+        startActivity(Intent.createChooser(sharingIntent, "Share using"));
+
+        Fragment frag = getFragmentManager().findFragmentByTag("ShortenUrlDialogFragment");
+        if (frag instanceof ShortenUrlDialogFragment) {
+            ((ShortenUrlDialogFragment) frag).dismiss();
+        }
+    }
 
     /*
     * Alert Dialog to prompt user to enable location access
@@ -273,6 +377,19 @@ public class StartActivity extends FragmentActivity implements
             builder.setView(inflater.inflate(R.layout.url_short_layout, null));
 
             // Create the AlertDialog object and return it
+            AlertDialog alert = builder.create();
+            alert.setOnDismissListener(new DialogInterface.OnDismissListener() {
+                @Override
+                public void onDismiss(DialogInterface dialog) {
+                    Fragment frag = getFragmentManager().findFragmentByTag("ShortenUrlDialogFragment");
+                    if (frag instanceof ShortenUrlDialogFragment) {
+                        if (urlShort != null) {
+                            urlShort.cancel(true);
+                        }
+                    }
+                    dialog.dismiss();
+                }
+            });
             return builder.create();
         }
     }
@@ -288,7 +405,7 @@ public class StartActivity extends FragmentActivity implements
     public void onConnected(Bundle dataBundle) {
         // Display the connection status
         mCurrentLocation = mLocationClient.getLastLocation();
-        refreshlocation();
+        refreshlocation(true);
 
     }
 
@@ -351,7 +468,7 @@ public class StartActivity extends FragmentActivity implements
      * String   - An address passed to onPostExecute()
      */
     private class GetAddressTask extends
-            AsyncTask<Location, Void, String> {
+            AsyncTask<Location, String, String> {
         Context mContext;
         public GetAddressTask(Context context) {
             super();
@@ -370,56 +487,7 @@ public class StartActivity extends FragmentActivity implements
 
         @Override
         protected String doInBackground(Location... params) {
-            Geocoder geocoder =
-                    new Geocoder(mContext, Locale.getDefault());
-            // Get the current location from the input parameter list
-            Location loc = params[0];
-            // Create a list to contain the result address
-            List<Address> addresses = null;
-            try {
-                /*
-                 * Return 1 address.
-                 */
-                addresses = geocoder.getFromLocation(loc.getLatitude(),
-                        loc.getLongitude(), 1);
-            } catch (IOException e1) {
-                Log.e("LocationSampleActivity",
-                        "IO Exception in getFromLocation()");
-                e1.printStackTrace();
-                return ("IO Exception trying to get address");
-            } catch (IllegalArgumentException e2) {
-                // Error message to post in the log
-                String errorString = "Illegal arguments " +
-                        Double.toString(loc.getLatitude()) +
-                        " , " +
-                        Double.toString(loc.getLongitude()) +
-                        " passed to address service";
-                Log.e("LocationSampleActivity", errorString);
-                e2.printStackTrace();
-                return errorString;
-            }
-            // If the reverse geocode returned an address
-            if (addresses != null && addresses.size() > 0) {
-                // Get the first address
-                Address address = addresses.get(0);
-                /*
-                 * Format the first line of address (if available),
-                 * city, and country name.
-                 */
-                String addressText = String.format(
-                        "%s, %s, %s",
-                        // If there's a street address, add it
-                        address.getMaxAddressLineIndex() > 0 ?
-                                address.getAddressLine(0) : "",
-                        // Locality is usually a city
-                        address.getLocality(),
-                        // The country of the address
-                        address.getCountryName());
-                // Return the text
-                return addressText;
-            } else {
-                return "No address found";
-            }
+            return getAdressFromLocation(params[0]);
         }
 
         @Override
@@ -429,6 +497,57 @@ public class StartActivity extends FragmentActivity implements
             mRefreshButton.setVisibility(View.VISIBLE);
             // Display the results of the lookup.
             mAddress.setText(address);
+        }
+    }
+
+    public String getAdressFromLocation(Location loc) {
+        Geocoder geocoder =
+                new Geocoder(this, Locale.getDefault());
+        // Create a list to contain the result address
+        List<Address> addresses = null;
+        try {
+                /*
+                 * Return 1 address.
+                 */
+            addresses = geocoder.getFromLocation(loc.getLatitude(),
+                    loc.getLongitude(), 1);
+        } catch (IOException e1) {
+            Log.e("LocationSampleActivity",
+                    "Error, try again");
+            e1.printStackTrace();
+            return ("Error, try again");
+        } catch (IllegalArgumentException e2) {
+            // Error message to post in the log
+            String errorString = "Illegal arguments " +
+                    Double.toString(loc.getLatitude()) +
+                    " , " +
+                    Double.toString(loc.getLongitude()) +
+                    " passed to address service";
+            Log.e("LocationSampleActivity", errorString);
+            e2.printStackTrace();
+            return errorString;
+        }
+        // If the reverse geocode returned an address
+        if (addresses != null && addresses.size() > 0) {
+            // Get the first address
+            Address address = addresses.get(0);
+                /*
+                 * Format the first line of address (if available),
+                 * city, and country name.
+                 */
+            String addressText = String.format(
+                    "%s, %s, %s",
+                    // If there's a street address, add it
+                    address.getMaxAddressLineIndex() > 0 ?
+                            address.getAddressLine(0) : "",
+                    // Locality is usually a city
+                    address.getLocality(),
+                    // The country of the address
+                    address.getCountryName());
+            // Return the text
+            return addressText;
+        } else {
+            return "No address found";
         }
     }
 }
