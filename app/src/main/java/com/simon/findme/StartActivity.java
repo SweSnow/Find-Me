@@ -14,14 +14,17 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.support.v4.app.FragmentActivity;
+import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -38,6 +41,7 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.shamanland.fab.FloatingActionButton;
 
 import static com.rosaloves.bitlyj.Bitly.*;
 
@@ -45,7 +49,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-public class StartActivity extends FragmentActivity implements
+public class StartActivity extends ActionBarActivity implements
         GooglePlayServicesClient.ConnectionCallbacks,
         GooglePlayServicesClient.OnConnectionFailedListener {
 
@@ -60,10 +64,7 @@ public class StartActivity extends FragmentActivity implements
 
     /*Views*/
     private TextView mAddress;
-    private ProgressBar mActivityIndicator;
     private GoogleMap map;
-    private ImageButton mRefreshButton;
-    private LinearLayout mLocationUpdateLayout;
 
     /*Various*/
     public static URLShort urlShort;
@@ -73,36 +74,51 @@ public class StartActivity extends FragmentActivity implements
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        //We do this to change the Action Bar title font
-        this.getActionBar().setDisplayShowCustomEnabled(true);
-        this.getActionBar().setDisplayShowTitleEnabled(false);
-
-        //Inflate the mew layout...
-        LayoutInflater inflator = LayoutInflater.from(this);
-        View v = inflator.inflate(R.layout.titleview, null);
-
-        //...And set the font
-        ((TextView)v.findViewById(R.id.title)).setText(this.getTitle());
-
-        this.getActionBar().setCustomView(v);
-
         setContentView(R.layout.activity_start);
 
         mAddress = (TextView) findViewById(R.id.address);
-        mActivityIndicator = (ProgressBar) findViewById(R.id.address_progress);
-        mRefreshButton = (ImageButton) findViewById(R.id.refresh_btn);
-        mLocationUpdateLayout = (LinearLayout) findViewById(R.id.location_update_layout);
 
-        mRefreshButton.setOnClickListener(new View.OnClickListener() {
+        mAddress.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 refreshlocation(true);
             }
         });
-
         mLocationClient = new LocationClient(this, this, this);
 
         map = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
+
+        if (map == null) {
+            Toast.makeText(this, "Google Play Services not installed", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        View.OnClickListener fabClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mCurrentLocation == null) {
+                    Toast.makeText(getApplicationContext(), "Unable to get location", Toast.LENGTH_LONG).show();
+                } else {
+                    //We take the base url for Google Maps. "daddr=" is Destionation Adress
+                    // and we just add the latitude and Longitude of the current location
+                    String longUrl = "http://maps.google.com/?daddr=" + mCurrentLocation.getLatitude() + "," + mCurrentLocation.getLongitude();
+
+                    urlShort = new URLShort();
+
+                    urlShort.execute(longUrl, getAdressFromLocation(mCurrentLocation));
+                }
+            }
+        };
+
+        if (Build.VERSION.SDK_INT >= 21) {
+            ImageButton fab = (ImageButton) findViewById(R.id.fab_l);
+            fab.setOnClickListener(fabClickListener);
+        } else {
+            FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab_normal);
+            fab.setOnClickListener(fabClickListener);
+        }
+
+        map.setPadding(0, 0, (int) (16 * getResources().getDisplayMetrics().density + 0.5f), (int) (38 * getResources().getDisplayMetrics().density + 0.5f));
 
         map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
             @Override
@@ -117,8 +133,6 @@ public class StartActivity extends FragmentActivity implements
                 refreshlocation(true);
 
                 inDetailMode = true;
-
-                updateDetailMode();
             }
         });
 
@@ -168,63 +182,6 @@ public class StartActivity extends FragmentActivity implements
         super.onStop();
     }
 
-    //This is the onClick() method for our main layout's button.
-    public void shareLocation(View v) {
-
-        if (mCurrentLocation == null) {
-            Toast.makeText(this, "Unable to get location", Toast.LENGTH_LONG).show();
-        } else {
-            //We take the base url for Google Maps. "daddr=" is Destionation Adress
-            // and we just add the latitude and Longitude of the current location
-            String longUrl = "http://maps.google.com/?daddr=" + mCurrentLocation.getLatitude() + "," + mCurrentLocation.getLongitude();
-
-            urlShort = new URLShort();
-
-            urlShort.execute(longUrl, getAdressFromLocation(mCurrentLocation));
-        }
-
-    }
-
-    public void updateDetailMode() {
-        if (inDetailMode) {
-            mLocationUpdateLayout.setVisibility(View.VISIBLE);
-
-            Animation anim = AnimationUtils.loadAnimation(this, android.R.anim.fade_in);
-            mLocationUpdateLayout.startAnimation(anim);
-        } else {
-            Animation anim = AnimationUtils.loadAnimation(this, android.R.anim.fade_out);
-
-            anim.setAnimationListener(new Animation.AnimationListener() {
-                @Override
-                public void onAnimationStart(Animation animation) {
-
-                }
-
-                @Override
-                public void onAnimationEnd(Animation animation) {
-                    mLocationUpdateLayout.setVisibility(View.GONE);
-                }
-
-                @Override
-                public void onAnimationRepeat(Animation animation) {
-
-                }
-            });
-
-            mLocationUpdateLayout.startAnimation(anim);
-        }
-    }
-
-    public void resumeLocationUpdates(View v) {
-        inDetailMode = false;
-        updateDetailMode();
-
-        mCurrentLocation = lastGpsLocation;
-        refreshlocation(true);
-
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-    }
-
     public void refreshlocation(boolean animate) {
 
         if (mCurrentLocation == null) {
@@ -245,8 +202,6 @@ public class StartActivity extends FragmentActivity implements
             // Ensure that a Geocoder services is available
             if (Geocoder.isPresent()) {
                 // Show the activity indicator
-                mActivityIndicator.setVisibility(View.VISIBLE);
-                mRefreshButton.setVisibility(View.GONE);
             /*s
              * Reverse geocoding is long-running and synchronous.
              * Run it on a background thread.
@@ -493,8 +448,6 @@ public class StartActivity extends FragmentActivity implements
         @Override
         protected void onPostExecute(String address) {
             // Set activity indicator visibility to "gone"
-            mActivityIndicator.setVisibility(View.GONE);
-            mRefreshButton.setVisibility(View.VISIBLE);
             // Display the results of the lookup.
             mAddress.setText(address);
         }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Material API 21 Compability styles -->
+
+    <style name="RippleBackground">
+        <item name="android:background">?android:attr/selectableItemBackgroundBorderless</item>
+    </style>
+
+    <style name="Elevation4DP">
+        <item name="android:elevation">4dp</item>
+    </style>
+
+    <style name="Elevation2DP">
+        <item name="android:elevation">2dp</item>
+    </style>
+
+</resources>

@@ -5,67 +5,24 @@
 
     </style>
 
-    <style name="Theme.Findme" parent="@android:style/Theme.Holo.Light.DarkActionBar">
-        <item name="android:windowBackground">@color/accent_color</item>
-        <item name="android:colorBackground">@color/accent_color</item>
+    <style name="Theme.Findme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/background_material_light</item>
 
-        <item name="android:actionBarItemBackground">@drawable/selectable_background_findme</item>
-        <item name="android:popupMenuStyle">@style/PopupMenu.Findme</item>
-        <item name="android:dropDownListViewStyle">@style/DropDownListView.Findme</item>
-        <item name="android:actionBarTabStyle">@style/ActionBarTabStyle.Findme</item>
-        <item name="android:actionDropDownStyle">@style/DropDownNav.Findme</item>
-        <item name="android:actionBarStyle">@style/ActionBar.Solid.Findme</item>
-        <item name="android:actionModeBackground">@drawable/cab_background_top_findme</item>
-        <item name="android:actionModeSplitBackground">@drawable/cab_background_bottom_findme</item>
-        <item name="android:actionModeCloseButtonStyle">@style/ActionButton.CloseMode.Findme</item>
+        <item name="colorPrimary">@color/primary_color</item>
+        <item name="colorPrimaryDark">@color/primary_color_darker</item>
 
-        <!-- Light.DarkActionBar specific -->
-        <item name="android:actionBarWidgetTheme">@style/Theme.Findme.Widget</item>
+        <item name="colorAccent">@color/accent_color</item>
 
     </style>
 
-    <style name="ActionBar.Solid.Findme" parent="@android:style/Widget.Holo.Light.ActionBar.Solid.Inverse">
-        <item name="android:background">@drawable/ab_solid_findme</item>
-        <item name="android:backgroundStacked">@drawable/ab_stacked_solid_findme</item>
-        <item name="android:backgroundSplit">@drawable/ab_bottom_solid_findme</item>
-        <item name="android:progressBarStyle">@style/ProgressBar.Findme</item>
+    <!-- Material API 21 Compability styles -->
+
+    <style name="RippleBackground">
+        <item name="android:background">?android:attr/selectableItemBackground</item>
     </style>
 
-    <style name="ActionBar.Transparent.Findme" parent="@android:style/Widget.Holo.ActionBar">
-        <item name="android:background">@drawable/ab_transparent_findme</item>
-        <item name="android:progressBarStyle">@style/ProgressBar.Findme</item>
-    </style>
+    <style name="Elevation4DP"></style>
 
-    <style name="PopupMenu.Findme" parent="@android:style/Widget.Holo.ListPopupWindow">
-        <item name="android:popupBackground">@drawable/menu_dropdown_panel_findme</item>
-    </style>
-
-    <style name="DropDownListView.Findme" parent="@android:style/Widget.Holo.ListView.DropDown">
-        <item name="android:listSelector">@drawable/selectable_background_findme</item>
-    </style>
-
-    <style name="ActionBarTabStyle.Findme" parent="@android:style/Widget.Holo.ActionBar.TabView">
-        <item name="android:background">@drawable/tab_indicator_ab_findme</item>
-    </style>
-
-    <style name="DropDownNav.Findme" parent="@android:style/Widget.Holo.Spinner">
-        <item name="android:background">@drawable/spinner_background_ab_findme</item>
-        <item name="android:popupBackground">@drawable/menu_dropdown_panel_findme</item>
-        <item name="android:dropDownSelector">@drawable/selectable_background_findme</item>
-    </style>
-
-    <style name="ProgressBar.Findme" parent="@android:style/Widget.Holo.ProgressBar.Horizontal">
-        <item name="android:progressDrawable">@drawable/progress_horizontal_findme</item>
-    </style>
-
-    <style name="ActionButton.CloseMode.Findme" parent="@android:style/Widget.Holo.ActionButton.CloseMode">
-        <item name="android:background">@drawable/btn_cab_done_findme</item>
-    </style>
-
-    <!-- this style is only referenced in a Light.DarkActionBar based theme -->
-    <style name="Theme.Findme.Widget" parent="@android:style/Theme.Holo">
-        <item name="android:popupMenuStyle">@style/PopupMenu.Findme</item>
-        <item name="android:dropDownListViewStyle">@style/DropDownListView.Findme</item>
-    </style>
+    <style name="Elevation2DP"></style>
 
 </resources>
